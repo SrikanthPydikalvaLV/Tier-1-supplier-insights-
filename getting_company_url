@@ -1,0 +1,40 @@
+from googlesearch import search
+from urllib.parse import urlparse
+
+def find_best_website(company_name):
+    """
+    Use Google Search to find potential websites and return the best match based on domain patterns.
+    """
+    try:
+        query = f"{company_name} official site"
+        best_url = None
+        best_match_score = 0
+        
+        for url in search(query, num_results=10):  # Adjust num_results as needed
+            score = get_match_score(url, company_name)
+            if score > best_match_score:
+                best_match_score = score
+                best_url = url
+        
+        return best_url
+    except Exception as e:
+        print(f"Error searching for {company_name}: {e}")
+    return None
+
+def get_match_score(url, company_name):
+    """
+    Calculate a score for how well the URL matches the company name.
+    """
+    company_name_parts = company_name.lower().split()
+    url_domain = urlparse(url).netloc.lower()
+    score = sum(part in url_domain for part in company_name_parts) + ("official" in url_domain)
+    return score
+
+if __name__ == "__main__":
+    company_name = input("Enter the company name: ")
+    best_website = find_best_website(company_name)
+    
+    if best_website:
+        print(f"The best match for {company_name} is: {best_website}")
+    else:
+        print(f"Could not find a suitable website for {company_name}.")
