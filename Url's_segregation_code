@@ -1,0 +1,59 @@
+import pandas as pd
+import re
+
+def clean_text(text):
+    """Remove special characters and convert to lowercase."""
+    if isinstance(text, str):
+        return re.sub(r'[^a-zA-Z0-9]', ' ', text).lower().split()
+    return []
+
+def match_words(company_name, url):
+    """Check if any word from the company name matches the URL base."""
+    company_words = clean_text(company_name)
+    cleaned_url = re.sub(r'https?://|www\.|\.com|[^a-zA-Z0-9]', '', url).lower()
+    matched_word = None
+    
+    for word in company_words:
+        if len(word) > 1 and word in cleaned_url:
+            matched_word = word
+            break
+        elif len(word) == 1 and word in cleaned_url and cleaned_url.count(word) > 1:
+            matched_word = word
+            break
+
+    return matched_word is not None
+
+def validate_companies(file_path):
+    """Read the Excel file and validate the URLs against company names."""
+    df = pd.read_excel(file_path)
+
+    # Ensure columns exist
+    if 'Company Name' not in df.columns or 'Official Website' not in df.columns:
+        raise ValueError("Excel file must contain 'Company Name' and 'Official Website' columns")
+
+    matched_urls = []
+    not_matched_urls = []
+
+    for _, row in df.iterrows():
+        company_name = str(row['Company Name'])
+        url = str(row['Official Website'])
+        
+        if match_words(company_name, url):
+            matched_urls.append(row)
+        else:
+            not_matched_urls.append(row)
+
+    # Create dataframes for different match categories
+    matched_df = pd.DataFrame(matched_urls)
+    not_matched_df = pd.DataFrame(not_matched_urls)
+
+    # Save to Excel file
+    with pd.ExcelWriter('finalized_Url_segeration.xlsx') as writer:
+        matched_df.to_excel(writer, sheet_name='Matched URLs', index=False)
+        not_matched_df.to_excel(writer, sheet_name='Not Matched URLs', index=False)
+    
+    print("Validation results saved to finalized_Url_segeration.xlsx")
+
+if __name__ == "__main__":
+    file_path = input("Enter the path to the Excel file: ")
+    validate_companies(file_path)
