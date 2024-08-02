@@ -3,8 +3,8 @@ import pandas as pd
 from urllib.parse import urlparse
 
 # Constants for Google Custom Search API
-API_KEY = 'AIzaSyCxpEtDy0CgNn9PgoCFMG15oLEOiqja_m4'  # Your Google Custom Search API key
-CSE_ID = '77559f98144a94ff9'  # Your Custom Search Engine ID
+API_KEY = ''  # Your Google Custom Search API key
+CSE_ID = ''  # Your Custom Search Engine ID
 
 # Function to get the official website of a company
 def get_official_website(company_name):
@@ -56,8 +56,8 @@ def is_valid_url(url):
     return pd.notna(url) and url != 'No URL found' and url != '#VALUE!'  # Check if URL is not empty or invalid
 
 # Read the company names from the Excel file
-input_file = "251-300.xlsx"  # Input file with company names
-output_file = "251-300-results.xlsx"  # Output file for results
+input_file = ".xlsx"  # Input file with company names
+output_file = ".xlsx"  # Output file for results
 
 # Load company names from the input Excel file into a DataFrame
 df = pd.read_excel(input_file)
