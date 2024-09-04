@@ -1,0 +1,123 @@
+import requests
+import pandas as pd
+
+# Constants for Google Custom Search API and SerpApi
+API_KEY = '' #replace with your key
+CSE_ID = '' #replace with your key
+SERP_API_KEY = '' #replace with your key
+
+# Function to fetch data from SerpApi
+def fetch_serpapi_data(query, api_key):
+    url = 'https://serpapi.com/search'
+    params = {
+        'engine': 'google',
+        'q': query,
+        'location': 'Austin, Texas, United States',
+        'google_domain': 'google.com',
+        'hl': 'en',
+        'gl': 'us',
+        'api_key': api_key
+    }
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json()
+
+# Function to clean and extract the company name
+def clean_company_name(name):
+    name = name.strip()
+    if name.lower().startswith("name:"):
+        name = name[len("name:"):].strip()
+    return name
+
+# Function to extract company name from SerpApi data
+def extract_company_name(data, original_company_name):
+    if 'answer_box' in data and 'answer' in data['answer_box']:
+        return clean_company_name(data['answer_box']['answer'])
+    if 'knowledge_graph' in data and 'title' in data['knowledge_graph']:
+        return clean_company_name(data['knowledge_graph']['title'])
+    return clean_company_name(original_company_name)
+
+# Function to get the report URL of a company
+def get_report_url(company_name, report_type, year):
+    search_url = "https://www.googleapis.com/customsearch/v1"
+    query = f"{company_name} {report_type} {year} filetype:pdf"
+    params = {
+        'key': API_KEY,
+        'cx': CSE_ID,
+        'q': query,
+        'num': 5
+    }
+    excluded_domains = [
+        "bloomberg.com", "linkedin.com", "bulton.com", "dnb.com",
+        "angleadvisors.com", "delrisco.com"
+    ]
+    try:
+        response = requests.get(search_url, params=params)
+        response.raise_for_status()
+        results = response.json()
+        if 'items' in results:
+            for item in results['items']:
+                report_url = item.get('link', 'No URL found')
+                if not any(domain in report_url for domain in excluded_domains):
+                    return report_url
+        return None
+    except requests.RequestException as e:
+        print(f"Error fetching results for {company_name} and {report_type}: {e}")
+        return None
+
+# Function to download a PDF from a given URL
+def download_pdf(url, filename):
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        with open(filename, 'wb') as file:
+            file.write(response.content)
+        print(f"PDF downloaded successfully and saved as {filename}")
+    except requests.RequestException as e:
+        print(f"Error downloading the PDF: {e}")
+
+# Main function to process the companies from the Excel file
+def process_companies_from_excel(file_path):
+    df = pd.read_excel(file_path)
+    results = []
+
+    for index, row in df.iterrows():
+        original_company_name = row['Company Name']
+        report_type = row['Report Type']
+        year = row['Year']
+
+        # Fetch parent company information using SerpApi
+        search_query = f"{original_company_name} parent company name"
+        serp_data = fetch_serpapi_data(search_query, SERP_API_KEY)
+        parent_company_name = extract_company_name(serp_data, original_company_name)
+
+        print(f"Processing {original_company_name} ({parent_company_name})")
+
+        # Download the report only if the parent company and original company are different
+        if parent_company_name != original_company_name:
+            parent_report_url = get_report_url(parent_company_name, report_type, year)
+            if parent_report_url:
+                parent_filename = f"{original_company_name}_parent_C_{parent_company_name}_{report_type}_{year}.pdf"
+                print(f"Downloading report for parent company {parent_company_name}...")
+                download_pdf(parent_report_url, parent_filename)
+                results.append((original_company_name, parent_company_name, "Yes"))
+
+        # Attempt to download the report for the original company or if they are the same
+        original_report_url = get_report_url(original_company_name, report_type, year)
+        if original_report_url:
+            original_filename = f"{original_company_name}_{report_type}_{year}.pdf"
+            print(f"Downloading report for {original_company_name}...")
+            download_pdf(original_report_url, original_filename)
+            if parent_company_name == original_company_name:
+                results.append((original_company_name, parent_company_name, "No"))
+            else:
+                results.append((original_company_name, parent_company_name, "Yes"))
+
+    # Write the results to an Excel file
+    result_df = pd.DataFrame(results, columns=['Original Company Name', 'Parent Company Name', 'Parent Company Exists'])
+    result_df.to_excel("company_report_results.xlsx", index=False)
+    print("Results saved to company_report_results.xlsx")
+
+if __name__ == "__main__":
+    excel_file_path = input("Enter the path to the Excel file: ")
+    process_companies_from_excel(excel_file_path)
