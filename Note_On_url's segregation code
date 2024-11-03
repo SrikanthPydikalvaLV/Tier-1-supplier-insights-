@@ -1,3 +1,0 @@
-In the URL segregation code, we need to provide an Excel file containing the Company Name and Official Website. 
-The code will attempt to match the URL path with the company name. 
-If there is a match, it will segregate as matched URLs; if there is no match, it will segregate as unmatched URLs.
