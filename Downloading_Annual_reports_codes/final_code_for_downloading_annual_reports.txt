@@ -1,0 +1,105 @@
+import requests
+from bs4 import BeautifulSoup as bs
+from urllib.parse import urljoin
+import os
+import re
+import pandas as pd
+
+# Constants for Google Custom Search API
+API_KEY = ''  # Your Google Custom Search API key
+CSE_ID = ''  # Your Custom Search Engine ID
+
+# Function to get the report URL of a company
+def get_report_url(company_name, report_type, year):
+    # Google Custom Search API endpoint
+    search_url = "https://www.googleapis.com/customsearch/v1"
+    
+    # Search query to find the specified report page
+    query = f"{company_name} {report_type} {year} filetype:pdf"
+    
+    # Parameters for the API request
+    params = {
+        'key': API_KEY,         # API key for authentication
+        'cx': CSE_ID,           # Custom Search Engine ID
+        'q': query,             # Search query
+        'num': 5                # Number of results to retrieve
+    }
+
+    # List of domains to exclude from results
+    excluded_domains = [
+        "bloomberg.com", "linkedin.com", "bulton.com", "dnb.com",
+        "angleadvisors.com", "delrisco.com"
+    ]
+
+    try:
+        # Make a GET request to the Google Custom Search API
+        response = requests.get(search_url, params=params)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+        results = response.json()   # Parse the JSON response
+
+        # Check if 'items' are present in the response and are not empty
+        if 'items' in results and len(results['items']) > 0:
+            # Iterate over the search results
+            for item in results['items']:
+                # Extract the URL from the search result
+                report_url = item.get('link', 'No URL found')
+                
+                # Check if the URL does not contain any of the excluded domains
+                if not any(domain in report_url for domain in excluded_domains):
+                    return report_url
+        return None
+    except requests.RequestException as e:
+        # Print an error message if the request fails
+        print(f"Error fetching results for {company_name} and {report_type}: {e}")
+        return None
+
+# Function to download a PDF from a given URL
+def download_pdf(url, output_file_path):
+    try:
+        # Make a GET request to the PDF URL
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an exception for HTTP errors
+
+        # Write the content of the response to a file
+        with open(output_file_path, 'wb') as file:
+            file.write(response.content)
+        print(f"PDF downloaded successfully and saved as {output_file_path}")
+
+    except requests.RequestException as e:
+        # Print an error message if the request fails
+        print(f"Error downloading the PDF: {e}")
+
+# Function to process the Excel file
+def process_excel(file_path):
+    # Read the Excel file into a DataFrame
+    df = pd.read_excel(file_path)
+
+    # Process each row in the DataFrame
+    for index, row in df.iterrows():
+        # Extract the company name, report type, and year from each row
+        company_name = row[0]
+        report_type = row[1]
+        year = row[2]
+
+        # Get the report URL for the given company, report type, and year
+        report_url = get_report_url(company_name, report_type, year)
+
+        # Output the result and download the PDF from the report URL
+        if report_url:
+            print(f"URL for {report_type} of {company_name}: {report_url}")
+            output_file_name = f"{company_name}_{report_type}_{year}_report.pdf"
+            download_pdf(report_url, output_file_name)
+        else:
+            print(f"No valid {report_type} URL found for {company_name}")
+
+# Main function to execute the script
+def main():
+    # Prompt the user to enter the path to the Excel file
+    file_path = input("Enter the path to the Excel file: ")
+    
+    # Process the Excel file
+    process_excel(file_path)
+
+# Entry point of the script
+if __name__ == "__main__":
+    main()
