@@ -1,0 +1,86 @@
+import requests
+import pandas as pd
+from urllib.parse import urlparse
+
+# Constants for Google Custom Search API
+API_KEY = ''  # Your Google Custom Search API key
+CSE_ID = ''  # Your Custom Search Engine ID
+
+# Function to get the official website of a company
+def get_official_website(company_name):
+    # Define the search URL for Google Custom Search API
+    search_url = "https://www.googleapis.com/customsearch/v1"
+    
+    # Define parameters for the API request
+    params = {
+        'key': API_KEY,
+        'cx': CSE_ID,
+        'q': company_name + " official website",  # Search query to find the official website
+        'num': 5  # Retrieve top 5 results to increase chances of finding the right URL
+    }
+    
+    # List of domains to exclude from the results
+    excluded_domains = ["bloomberg.com", "linkedin.com", "bulton.com", "dnb.com", "angleadvisors.com", "delrisco.com"]
+
+    try:
+        # Make the API request
+        response = requests.get(search_url, params=params)
+        response.raise_for_status()  # Check if the request was successful
+        results = response.json()  # Parse the JSON response
+
+        if 'items' in results and len(results['items']) > 0:
+            # Iterate through the search results
+            for item in results['items']:
+                official_url = item.get('link', 'No URL found')  # Get the URL from the result
+                # Check if the domain is not in the excluded list
+                if not any(domain in official_url for domain in excluded_domains):
+                    return official_url  # Return the first valid URL found
+        return None
+    except requests.RequestException as e:
+        print(f"Error fetching results for {company_name}: {e}")  # Print error message if request fails
+        return None
+
+# Function to normalize URLs for comparison
+def normalize_url(url):
+    parsed_url = urlparse(url)  # Parse the URL to extract the network location
+    netloc = parsed_url.netloc  # Get the network location (e.g., 'www.example.com')
+    # Remove 'www.' prefix and '.com' suffix for normalization
+    if netloc.startswith('www.'):
+        netloc = netloc[4:]
+    if netloc.endswith('.com'):
+        netloc = netloc[:-4]
+    return netloc  # Return the normalized network location
+
+# Function to check if the URL is valid
+def is_valid_url(url):
+    return pd.notna(url) and url != 'No URL found' and url != '#VALUE!'  # Check if URL is not empty or invalid
+
+# Read the company names from the Excel file
+input_file = ".xlsx"  # Input file with company names
+output_file = ".xlsx"  # Output file for results
+
+# Load company names from the input Excel file into a DataFrame
+df = pd.read_excel(input_file)
+
+# Add a new column for the detected URLs using the get_official_website function
+df['Code Detected URL'] = df['Company Name'].apply(get_official_website)
+
+# Cross-verify Manual URL and Code Detected URL, normalizing them first
+df['Result'] = df.apply(lambda row: 'YES' if is_valid_url(row['Manual URL']) and normalize_url(row['Manual URL']) == normalize_url(row['Code Detected URL']) else 'NO', axis=1)
+
+# Save the results to a new Excel file
+df.to_excel(output_file, index=False)
+
+# Calculate accuracy metrics, ignoring rows with invalid Manual URLs
+valid_rows = df[df['Manual URL'].apply(is_valid_url)]  # Filter out rows with invalid Manual URLs
+total_companies = len(valid_rows)  # Count of valid rows
+matched_urls = valid_rows['Result'].value_counts().get('YES', 0)  # Count of matched URLs
+unmatched_urls = total_companies - matched_urls  # Count of unmatched URLs
+matching_accuracy = (matched_urls / total_companies) * 100 if total_companies > 0 else 0  # Calculate accuracy percentage
+
+# Print the results
+print(f"Results saved to {output_file}")
+print(f"Total companies (valid URLs): {total_companies}")
+print(f"Matched URLs: {matched_urls}")
+print(f"Unmatched URLs: {unmatched_urls}")
+print(f"Matching Accuracy: {matching_accuracy:.2f}%")
